@@ -129,25 +129,29 @@ info "بررسی gplaydl..."
 if venv/bin/python -c "import gplaydl" &>/dev/null; then
     ok "gplaydl نصب شده"
 
-    # بررسی credentials
-    CRED1="$HOME/.gplaydl/credentials.json"
-    CRED2="$HOME/.config/gplaydl/credentials.json"
-    if [ -f "$CRED1" ] || [ -f "$CRED2" ]; then
-        ok "gplaydl credentials پیدا شد — تنظیم شده"
+    # بررسی auth (gplaydl v2 از auth-*.json در ~/.config/gplaydl استفاده می‌کنه)
+    AUTH_DIR="$HOME/.config/gplaydl"
+    LEGACY_CRED="$HOME/.gplaydl/credentials.json"
+    if ls "$AUTH_DIR"/auth-*.json &>/dev/null || [ -f "$LEGACY_CRED" ]; then
+        ok "gplaydl auth پیدا شد — تنظیم شده"
     else
-        warn "gplaydl هنوز تنظیم نشده!"
+        warn "gplaydl هنوز احراز هویت نشده!"
         echo ""
         echo "  باید یه بار این دستور رو اجرا کنی:"
         echo ""
-        echo "  source venv/bin/activate && gplaydl setup"
+        echo "  source venv/bin/activate && gplaydl auth"
         echo ""
-        echo "  یه ایمیل گوگل و رمز می‌خواد."
+        echo "  توکن ناشناس (anonymous) می‌گیره — نیازی به اکانت گوگل نیست."
         echo "  بعدش می‌تونی گوگل پلی رو دانلود کنی."
         echo ""
         read -r -p "  الان auth بگیرم؟ [Y/n] " ans
         if [[ ! "$ans" =~ ^[Nn]$ ]]; then
             echo "  در حال گرفتن anonymous token از Aurora OSS..."
-            venv/bin/gplaydl auth && ok "auth موفق بود" || {
+            venv/bin/gplaydl auth && {
+                ok "auth موفق بود"
+                echo "  برای پشتیبانی از گوشی‌های ۳۲ بیتی (حالت universal) این رو هم بزن:"
+                echo "  source venv/bin/activate && gplaydl auth --arch armv7"
+            } || {
                 warn "auth ناموفق بود — احتمالاً مشکل شبکه یا سرعت."
                 echo "  بعداً دستی اجرا کن: source venv/bin/activate && gplaydl auth"
                 echo "  اگه باز هم ناموفق بود، dispenser دیگه‌ای امتحان کن:"

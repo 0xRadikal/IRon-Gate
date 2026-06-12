@@ -162,16 +162,43 @@ async def download_url(
             f"{size_hint}"
         )
 
+    # ─── پل بین thread دانلود (sync) و callback پیشرفت (async) ──────────────
+    # _download_sync داخل asyncio.to_thread اجرا می‌شه، پس روی یه thread دیگه‌ست.
+    # برای رساندن پیشرفت به progress (که async هست) باید coroutine رو روی
+    # event loop اصلی با run_coroutine_threadsafe صف کنیم. (باگ قبلی: این
+    # callback هیچ کاری نمی‌کرد و نوار پیشرفت دانلود هیچ‌وقت آپدیت نمی‌شد.)
+    import time as _time
+
+    loop = asyncio.get_running_loop()
     last_report: list[float] = [0.0]
 
     def sync_progress(pct: int, current: int, total: int) -> None:
-        import time
-        now = time.monotonic()
+        if not progress:
+            return
+        now = _time.monotonic()
+        # حداکثر هر ۲ ثانیه یک‌بار آپدیت (جلوگیری از flood)
         if now - last_report[0] < 2.0:
             return
         last_report[0] = now
-        # این callback sync هست، نمیتونیم مستقیم await کنیم
-        # فقط اطلاعات رو ذخیره می‌کنیم
+
+        done_mb = current / (1024 * 1024)
+        total_mb = total / (1024 * 1024)
+        bar_len = 12
+        filled = int(bar_len * pct / 100)
+        bar = "█" * filled + "░" * (bar_len - filled)
+        msg = (
+            f"⬇️ در حال دانلود...\n"
+            f"📁 {dest.name}\n"
+            f"[{bar}] {pct}%\n"
+            f"💾 {done_mb:.1f} / {total_mb:.1f} MB"
+        )
+        # روی event loop اصلی صف کن (نتیجه رو منتظر نمی‌مونیم تا thread بلاک نشه)
+        try:
+            fut = asyncio.run_coroutine_threadsafe(progress(msg), loop)
+            # خطاهای احتمالی callback رو بی‌صدا نادیده بگیر
+            fut.add_done_callback(lambda f: f.exception())
+        except Exception:
+            pass
 
     try:
         await asyncio.wait_for(

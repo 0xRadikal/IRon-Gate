@@ -1,159 +1,194 @@
-# APK Downloader Bot
+<div align="center">
 
-ربات تلگرام + روبیکا برای دانلود APK از گوگل پلی.
+# 🛡️ IRon-Gate
 
-کاربر لینک گوگل پلی می‌فرسته → ربات APK رو دانلود می‌کنه → همونجا (تلگرام یا روبیکا) ارسال می‌کنه.
+**پل امن دانلود APK از گوگل پلی به تلگرام و روبیکا**
 
-## معماری
+ربات دوگانه‌ای که در روزهای محدودیت اینترنت ساخته شد تا دسترسی به برنامه‌ها قطع نشه.
+
+کاربر لینک گوگل پلی می‌فرسته → ربات APK رو دانلود و آماده می‌کنه → روی همون پلتفرم (تلگرام یا روبیکا) برمی‌گردونه.
+
+</div>
+
+---
+
+## ✨ امکانات
+
+- 📥 **دانلود از گوگل پلی** بدون نیاز به اکانت گوگل (توکن anonymous از طریق `gplaydl` v2)
+- 🌍 **خروجی Universal APK** — یک فایل که روی **همهٔ** گوشی‌ها (هم ۳۲ بیتی هم ۶۴ بیتی) نصب می‌شه
+- 🔗 **دانلود از هر لینک مستقیم** (نه فقط گوگل پلی) با نوار پیشرفت زنده
+- 📲 **دو پلتفرم هم‌زمان**: تلگرام (Pyrogram) و روبیکا (rubpy)
+- ⚡ **آپلود سریع روبیکا** — آپلود موازی چندچانکی به‌جای آپلود سری کند
+- 🗜️ **حالت ZIP اختیاری** با رمز برای دور زدن محدودیت پسوند فایل
+- 🔁 **خودترمیم**: اگه یکی از ربات‌ها کرش کنه، `main.py` خودکار ری‌استارتش می‌کنه
+
+---
+
+## 🏗️ معماری
 
 ```
 کاربر تلگرام ──→ telegram_bot.py ──┐
-                                    ├──→ downloader.py ──→ APK نهایی
-کاربر روبیکا ──→ rubika_bot.py ────┘         ↓               ↓
-                                         (gplaydl)      (APKEditor)
-                                              ↓               ↓
-                                    APK برمی‌گرده به همون پلتفرم
+                                    ├──→ downloader.py ──→ APK نهایی (universal)
+کاربر روبیکا ──→ rubika_bot.py ────┘         │                    │
+                                          (gplaydl v2)        (APKEditor.jar)
+                                              │                    │
+                                    APK روی همون پلتفرم برمی‌گرده
+                                    (با rubika_speedup برای آپلود سریع)
 ```
 
-## پیش‌نیازها
+---
+
+## 🚀 بهبودهای نسخهٔ جدید
+
+| مشکل قبلی | راه‌حل |
+|-----------|--------|
+| **آپلود روبیکا خیلی کند بود** | ماژول `rubika_speedup.py`: فایل رو **یک‌بار** می‌خونه (به‌جای باز کردن مجدد برای هر چانک)، چانک‌ها رو **موازی** (`RUBIKA_UPLOAD_WORKERS`) آپلود می‌کنه و چانک پیش‌فرض رو به **۸ مگابایت** بزرگ می‌کنه. |
+| **خروجی فقط برای یک معماری بود** | حالت `universal` در `downloader.py` بازنویسی شد: مجموعهٔ کامل arm64 + split معماری ۳۲ بیتی (armeabi-v7a) با de-dup درست بر اساس نام فایل ترکیب و با APKEditor ادغام می‌شه (دیگه `base.apk` تکراری/خراب ساخته نمی‌شه). |
+| **نوار پیشرفت دانلود لینک کار نمی‌کرد** | `url_downloader.py`: پل بین thread دانلود (sync) و callback (async) با `run_coroutine_threadsafe` درست شد. |
+| **bootstrap از دستور منسوخ `gplaydl setup` استفاده می‌کرد** | به `gplaydl auth` (نسخهٔ ۲) و مسیر درست `~/.config/gplaydl/auth-*.json` به‌روزرسانی شد. |
+
+---
+
+## 📋 پیش‌نیازها
 
 - Python 3.10+
 - Java 17+ (برای APKEditor — ترکیب split APKها)
-- یک اکانت گوگل (برای gplaydl)
 
 نصب Java روی اوبونتو:
 ```bash
 sudo apt update && sudo apt install -y openjdk-17-jre-headless
 ```
 
-## نصب
+---
+
+## ⚙️ نصب
 
 ```bash
-git clone <this-repo>
-cd apkdl-bot
+git clone https://github.com/0xRadikal/IRon-Gate.git
+cd IRon-Gate
 
-# کپی کردن rubika_auth_helper.py از Walrus
-cp /path/to/walrus/rubika_auth_helper.py .
+# نصب خودکار (توصیه می‌شه)
+bash setup.sh
 
+# یا دستی:
 python3 -m venv venv
-source venv/bin/activate        # ویندوز: venv\Scripts\activate
-
+source venv/bin/activate          # ویندوز: venv\Scripts\activate
 pip install -r requirements.txt
-
 cp .env.example .env
-nano .env                       # تنظیمات رو پر کن
+nano .env                         # تنظیمات رو پر کن
 ```
 
-## تنظیمات (.env)
+---
+
+## 🔐 تنظیمات (.env)
+
+همهٔ مقادیر در `.env.example` با توضیح کامل اومده. مهم‌ترین‌ها:
 
 ```env
-API_ID=...           # از https://my.telegram.org
+API_ID=...              # از https://my.telegram.org
 API_HASH=...
-BOT_TOKEN=...        # از @BotFather
-OWNER_TELEGRAM_ID=   # اختیاری: ID تلگرام خودت
+BOT_TOKEN=...           # از @BotFather
+OWNER_TELEGRAM_ID=      # اختیاری ولی توصیه‌شده: فقط خودت دسترسی داشته باشی
 RUBIKA_SESSION=rubsession
-PLAY_ARCH=arm64
+PLAY_ARCH=universal     # universal | arm64 | armv7
+RUBIKA_UPLOAD_CHUNK=8388608   # ۸MB — برای آپلود سریع‌تر
+RUBIKA_UPLOAD_WORKERS=4       # تعداد آپلود موازی
 ```
 
-## اولین اجرا — تنظیم gplaydl
+> ⚠️ **امنیت:** فایل‌های `.env` و `*.session` (حاوی توکن ورود روبیکا) هرگز نباید commit بشن — در `.gitignore` مسدود شدن.
+
+---
+
+## 🔑 اولین اجرا — احراز هویت gplaydl
 
 ```bash
-gplaydl setup
+source venv/bin/activate
+gplaydl auth                  # توکن ناشناس می‌گیره (بدون اکانت گوگل)
+gplaydl auth --arch armv7     # برای پشتیبانی universal از گوشی‌های ۳۲ بیتی
 ```
-یه ایمیل گوگل و پسورد می‌خواد. بعد از setup، gplaydl توکن auth می‌سازه و ذخیره می‌کنه.
 
-## راه‌اندازی
+---
+
+## ▶️ راه‌اندازی
 
 ```bash
 python main.py
 ```
 
-main.py:
-- ابزارها رو بررسی می‌کنه (APKEditor رو اتوماتیک دانلود می‌کنه)
-- telegram_bot.py و rubika_bot.py رو به‌عنوان process جداگانه شروع می‌کنه
-- اگه هر کدوم کرش کردن، ری‌استارت می‌کنه
+`main.py` ابزارها رو بررسی می‌کنه (APKEditor رو خودکار دانلود می‌کنه)، هر دو ربات رو به‌عنوان process جداگانه اجرا می‌کنه و در صورت کرش ری‌استارت می‌کنه.
 
-## تنظیم حساب روبیکا
+---
 
-ربات تلگرام رو باز کن:
-```
-/set_rubika
-```
+## 📲 تنظیم حساب روبیکا
 
-مراحل:
-1. شماره موبایل روبیکا رو بفرست
-2. اگه رمز حساب پرسید، رمز رو بفرست
-3. کد OTP رو بفرست
-4. تموم! session ذخیره شد
+در ربات تلگرام `/set_rubika` رو بزن و مراحل رو دنبال کن:
+1. شمارهٔ موبایل روبیکا
+2. رمز حساب (اگه داشت)
+3. کد OTP
 
-بعد از این، rubika_bot.py اتوماتیک session رو پیدا می‌کنه.
+بعد از این، `rubika_bot.py` خودکار session رو پیدا می‌کنه.
 
-## استفاده
+---
 
-**از تلگرام:**
+## 💡 استفاده
+
+**گوگل پلی** — این لینک رو به ربات بفرست:
 ```
 https://play.google.com/store/apps/details?id=org.telegram.messenger
 ```
-APK توی چت تلگرام برات ارسال می‌شه.
 
-**از روبیکا:**
-همون لینک رو برای حساب روبیکاِ ربات بفرست.
-APK توی روبیکا بهت می‌رسه.
+**لینک مستقیم** — هر URL مستقیم فایل هم پشتیبانی می‌شه.
 
-## دستورات تلگرام
+APK آماده‌شده روی همون پلتفرمی که ازش پیام دادی برمی‌گرده.
 
-| دستور | کار |
-|-------|-----|
-| `/start` | وضعیت و راهنما |
-| `/set_rubika` | تنظیم حساب روبیکا |
-| `/status` | وضعیت دانلودهای فعال |
-| `/help` | راهنما |
+---
 
-## دستورات روبیکا
+## 🧩 دستورات
 
-| پیام | کار |
-|------|-----|
-| `سلام` یا `/start` | خوش‌آمد |
-| لینک گوگل پلی | دانلود APK |
-| `/help` | راهنما |
+| تلگرام | کار |  | روبیکا | کار |
+|--------|-----|--|--------|-----|
+| `/start` | وضعیت و راهنما |  | `/start` / `سلام` | خوش‌آمد |
+| `/set_rubika` | تنظیم حساب روبیکا |  | لینک گوگل پلی | دانلود APK |
+| `/telegram` / `/rubika` | انتخاب مقصد |  | `/help` | راهنما |
+| `/help` | راهنما |  | | |
 
-## نکات مهم
+---
 
-- فقط برنامه‌های رایگان قابل دانلودند.
-- بعضی برنامه‌ها DRM دارن و gplaydl نمی‌تونه دانلودشون کنه.
-- split APKها اتوماتیک با APKEditor ترکیب می‌شن — Java لازم داره.
-- APKEditor اتوماتیک از GitHub دانلود می‌شه اگه نبود.
-
-## ساختار فایل‌ها
+## 📁 ساختار فایل‌ها
 
 ```
-apkdl-bot/
-├── main.py                  ← نقطه ورود
+IRon-Gate/
+├── main.py                  ← نقطهٔ ورود و مدیریت process
 ├── telegram_bot.py          ← ربات تلگرام (Pyrogram)
 ├── rubika_bot.py            ← ربات روبیکا (rubpy)
-├── downloader.py            ← پایپلاین دانلود
-├── bootstrap.py             ← نصب خودکار ابزارها
-├── rubika_auth_helper.py    ← auth روبیکا (از Walrus کپی کن)
+├── downloader.py            ← پایپلاین دانلود + ساخت universal APK
+├── url_downloader.py        ← دانلود لینک مستقیم (با پیشرفت زنده)
+├── rubika_uploader.py       ← آپلود فایل به روبیکا
+├── rubika_speedup.py        ← ⚡ شتاب‌دهندهٔ آپلود (آپلود موازی)
+├── rubika_auth_helper.py    ← احراز هویت روبیکا
+├── bootstrap.py             ← نصب خودکار gplaydl + APKEditor
+├── setup.sh                 ← اسکریپت نصب
 ├── requirements.txt
-├── .env
+├── .env.example
 └── tools/
-    └── APKEditor.jar        ← اتوماتیک دانلود می‌شه
+    └── APKEditor.jar        ← خودکار دانلود می‌شه
 ```
 
-## رفع مشکل
+---
 
-**gplaydl: credentials error**
-```bash
-gplaydl setup   # دوباره اجرا کن
-```
+## 🛠️ رفع مشکل
 
-**APKEditor پیدا نشد**
-از [اینجا](https://github.com/REAndroid/APKEditor/releases) دانلود کن و توی `tools/APKEditor.jar` بذار.
+| مشکل | راه‌حل |
+|------|--------|
+| `gplaydl: auth error` | `gplaydl auth` رو دوباره اجرا کن |
+| APKEditor پیدا نشد | از [releases](https://github.com/REAndroid/APKEditor/releases) دانلود و در `tools/APKEditor.jar` بذار |
+| session روبیکا کار نمی‌کنه | در ربات تلگرام `/set_rubika` رو بزن |
+| آپلود روبیکا هنوز کنده | `RUBIKA_UPLOAD_WORKERS` و `RUBIKA_UPLOAD_CHUNK` رو در `.env` بیشتر کن |
 
-**session روبیکا کار نمی‌کنه**
-```
-/set_rubika   # در ربات تلگرام
-```
+---
 
-**rubika_auth_helper.py پیدا نشد**
-از ریپوی [Walrus](https://github.com/rezaaa/walrus) کپی کن.
+## ⚖️ نکات
+
+- فقط برنامه‌های **رایگان** قابل دانلودند؛ برنامه‌های پولی یا دارای DRM کار نمی‌کنن.
+- این پروژه صرفاً برای دسترسی شخصی به برنامه‌های رایگان در شرایط محدودیت اینترنت ساخته شده.
+- بخش احراز هویت روبیکا از پروژهٔ Walrus الهام گرفته شده.

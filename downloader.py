@@ -158,38 +158,77 @@ async def _merge_apk(
 # ─── Universal: دو معماری رو ادغام می‌کنیم ──────────────────────────────────
 
 
-def _collect_splits(src: Path, combined_dir: Path, prefix: str) -> int:
+def _iter_apk_files(src: Path, tmp_dir: Path, tag: str) -> list[Path]:
     """
-    همه split APKهای یه معماری رو به combined_dir کپی می‌کنه.
+    همه فایل‌های APK یه دانلود رو برمی‌گردونه.
 
-    - فایل‌های تکراری (مثل base.apk) از arm64 گرفته می‌شن و armv7 رد می‌شه.
-    - فایل‌های معماری‌مخصوص (config.arm64 / config.armeabi) هر دو نگه داشته می‌شن.
-
-    Returns:
-        تعداد فایل‌های کپی‌شده
+    - اگه src پوشه باشه: همه *.apk داخلش
+    - اگه .apks (zip) باشه: اول unzip بعد *.apk
+    - اگه یه .apk تنها باشه: همون
     """
+    if src.is_dir():
+        return sorted(p for p in src.rglob("*.apk") if p.is_file())
+    if src.suffix == ".apks":
+        unzip_dir = tmp_dir / f"_unzip_{tag}"
+        unzip_dir.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(src) as z:
+            z.extractall(unzip_dir)
+        return sorted(p for p in unzip_dir.rglob("*.apk") if p.is_file())
+    if src.suffix == ".apk":
+        return [src]
+    return []
+
+
+# نشانه‌های نام فایل برای تشخیص split معماری ۳۲ بیتی (armv7)
+_ARMV7_MARKERS = ("armeabi_v7a", "armeabi-v7a", "armeabi", "_armeabi", ".armeabi")
+
+
+def _is_armv7_abi_split(name: str) -> bool:
+    low = name.lower()
+    return any(m in low for m in _ARMV7_MARKERS)
+
+
+def _collect_universal_splits(
+    arm64_files: list[Path],
+    armv7_files: list[Path],
+    combined_dir: Path,
+) -> int:
+    """
+    splitهای دو دانلود رو هوشمندانه ترکیب می‌کنه تا یه مجموعهٔ معتبر بسازه.
+
+    منطق درست (مشکل قبلی این بود که base.apk دوبار با پیشوند کپی می‌شد و
+    باعث خرابی ادغام APKEditor می‌شد):
+
+      ۱. کل مجموعهٔ arm64 رو می‌گیریم (base + config.arm64_v8a + همهٔ
+         splitهای DPI/زبان مشترک). این مبنا (canonical) هست.
+      ۲. از دانلود armv7 فقط split معماری ۳۲ بیتی (config.armeabi_v7a)
+         رو اضافه می‌کنیم؛ base و بقیهٔ splitهای مشترک نادیده گرفته می‌شن
+         چون از قبل در مجموعهٔ arm64 هستن.
+      ۳. کپی بر اساس «نام فایل» de-dup می‌شه؛ هیچ پیشوند تکراری اضافه نمی‌شه
+         تا APKEditor دقیقاً یک base ببینه.
+
+    خروجی: مجموعه‌ای از splitها که هم arm64_v8a و هم armeabi_v7a داره →
+    APK نهایی روی هر دو معماری نصب می‌شه (universal/fat).
+    """
+    seen: set[str] = set()
     copied = 0
 
-    # اگه src پوشه هست، همه .apkهاش رو بگیر
-    if src.is_dir():
-        files = sorted(p for p in src.rglob("*.apk") if p.is_file())
-    elif src.suffix == ".apks":
-        # فایل .apks رو unzip کن
-        tmp = combined_dir / f"_unzip_{prefix}"
-        tmp.mkdir(exist_ok=True)
-        with zipfile.ZipFile(src) as z:
-            z.extractall(tmp)
-        files = sorted(p for p in tmp.rglob("*.apk") if p.is_file())
-    else:
-        # تنها APK
-        files = [src] if src.suffix == ".apk" else []
+    # ۱. مبنا: کل arm64
+    for f in arm64_files:
+        if f.name in seen:
+            continue
+        shutil.copy2(f, combined_dir / f.name)
+        seen.add(f.name)
+        copied += 1
 
-    for f in files:
-        dest = combined_dir / f.name
-        if dest.exists():
-            # اگه فایل از قبل هست (مثل base.apk از arm64)، نسخه جدید رو با پیشوند ذخیره کن
-            dest = combined_dir / f"{prefix}_{f.name}"
-        shutil.copy2(f, dest)
+    # ۲. از armv7 فقط split ABI سی‌و‌دو‌بیتی
+    for f in armv7_files:
+        if not _is_armv7_abi_split(f.name):
+            continue
+        if f.name in seen:
+            continue
+        shutil.copy2(f, combined_dir / f.name)
+        seen.add(f.name)
         copied += 1
 
     return copied
@@ -202,55 +241,75 @@ async def _build_universal_apk(
     progress: ProgressCallback,
 ) -> Path:
     """
-    Fat APK شامل هر دو معماری arm64 و armv7.
+    Universal (fat) APK شامل هر دو معماری arm64-v8a و armeabi-v7a.
 
-    روش:
-      ۱. دانلود splits مخصوص arm64
-      ۲. دانلود splits مخصوص armv7
-      ۳. کپی همه splits در یه پوشه مشترک
-         (splits مشترک مثل base.apk و config.xxhdpi فقط یه بار کپی می‌شن)
-      ۴. APKEditor همه splits رو با هم ادغام می‌کنه
+    روش درست:
+      ۱. یک‌بار با arm64 دانلود می‌کنیم → base + config.arm64_v8a +
+         splitهای DPI/زبان (مجموعهٔ مبنا).
+      ۲. یک‌بار با armv7 دانلود می‌کنیم → فقط برای گرفتن config.armeabi_v7a.
+      ۳. base و splitهای مشترک فقط یک‌بار نگه داشته می‌شن (de-dup بر اساس نام)؛
+         سپس split معماری ۳۲ بیتی اضافه می‌شه.
+      ۴. APKEditor مجموعه رو به یک APK واحد ادغام می‌کنه که روی همهٔ
+         دستگاه‌ها (۳۲ و ۶۴ بیتی) نصب می‌شه.
     """
     arm64_dir = job_dir / "dl_arm64"
     armv7_dir = job_dir / "dl_armv7"
     combined_dir = job_dir / "combined"
     combined_dir.mkdir(parents=True, exist_ok=True)
 
-    # ─── arm64 ──────────────────────────────────────────────────────────────
+    # ─── دانلود مبنا (arm64) ─────────────────────────────────────────────────
     await progress(
-        f"⬇️ دانلود splits مخصوص arm64...\n"
+        f"⬇️ مرحله ۱/۲ — دانلود مجموعهٔ کامل (arm64-v8a)...\n"
         f"📱 {package}\n"
-        f"🔄 این برای ساخت Universal APK دو بار دانلود می‌کنه"
+        f"🌍 در حال ساخت Universal APK (دو بار دانلود)"
     )
     try:
         arm64_result = await _run_gplaydl(package, arm64_dir, "arm64")
     except DownloadError as exc:
         raise DownloadError(f"دانلود arm64 برای universal APK ناموفق بود:\n{exc}") from exc
 
-    # ─── armv7 ──────────────────────────────────────────────────────────────
+    # ─── دانلود مکمل (armv7) ─────────────────────────────────────────────────
     await progress(
-        f"⬇️ دانلود splits مخصوص armv7...\n"
-        f"📱 {package}\n"
-        f"🔄 بخش دوم دانلود..."
+        f"⬇️ مرحله ۲/۲ — دانلود split معماری ۳۲ بیتی (armeabi-v7a)...\n"
+        f"📱 {package}"
     )
     try:
         armv7_result = await _run_gplaydl(package, armv7_dir, "armv7")
     except DownloadError as exc:
         raise DownloadError(f"دانلود armv7 برای universal APK ناموفق بود:\n{exc}") from exc
 
-    # ─── ترکیب splits ──────────────────────────────────────────────────────
-    # arm64 اول (splits مشترک از نسخه arm64 گرفته می‌شن)
-    n1 = _collect_splits(arm64_result if not arm64_result.is_dir() else arm64_dir, combined_dir, "arm64")
-    n2 = _collect_splits(armv7_result if not armv7_result.is_dir() else armv7_dir, combined_dir, "armv7")
-    total_splits = len(list(combined_dir.glob("*.apk")))
+    # ─── ترکیب درست splitها ─────────────────────────────────────────────────
+    arm64_files = _iter_apk_files(
+        arm64_result if not arm64_result.is_dir() else arm64_dir,
+        job_dir, "arm64",
+    )
+    armv7_files = _iter_apk_files(
+        armv7_result if not armv7_result.is_dir() else armv7_dir,
+        job_dir, "armv7",
+    )
+
+    if not arm64_files:
+        raise DownloadError("هیچ APKی از دانلود arm64 پیدا نشد.")
+
+    n = _collect_universal_splits(arm64_files, armv7_files, combined_dir)
+    combined_files = sorted(combined_dir.glob("*.apk"))
+    total_splits = len(combined_files)
 
     if total_splits == 0:
         raise DownloadError("هیچ split APKی برای ادغام پیدا نشد.")
 
+    # اگه فقط یک فایل APK داریم (برنامه split نداره)، همون خودش universal هست
+    if total_splits == 1:
+        return combined_files[0]
+
+    has_armv7 = any(_is_armv7_abi_split(p.name) for p in combined_files)
+    abi_note = "هر دو معماری (arm64-v8a + armeabi-v7a)" if has_armv7 else "arm64-v8a"
+
     await progress(
-        f"🔧 ادغام {total_splits} فایل split APK با APKEditor...\n"
+        f"🔧 ادغام {total_splits} فایل split با APKEditor...\n"
         f"📱 {package}\n"
-        f"⏳ این ممکنه چند دقیقه طول بکشه"
+        f"🏗 معماری: {abi_note}\n"
+        f"⏳ ممکنه چند دقیقه طول بکشه"
     )
     return await _merge_apk(combined_dir, apkeditor_jar, output_name="universal.apk")
 

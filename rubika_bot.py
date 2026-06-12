@@ -27,7 +27,7 @@ load_dotenv()
 # ─── تنظیمات ─────────────────────────────────────────────────────────────────
 
 RUBIKA_SESSION = os.getenv("RUBIKA_SESSION", "rubsession").strip() or "rubsession"
-PLAY_ARCH = os.getenv("PLAY_ARCH", "arm64").strip() or "arm64"
+PLAY_ARCH = os.getenv("PLAY_ARCH", "universal").strip() or "universal"
 _raw_dl = os.getenv("DOWNLOAD_DIR", "downloads").strip() or "downloads"
 DOWNLOAD_DIR = Path(_raw_dl) / "rub"
 APKEDITOR_JAR = Path(os.getenv("APKEDITOR_JAR", "tools/APKEditor.jar"))
@@ -259,7 +259,7 @@ async def _upload_to_rubika(client, object_guid: str, file_path: Path, caption: 
         await update_status(f"⬆️ آپلود به روبیکا...\n📁 {file_path.name}\n📊 {pct}%")
 
     await update_status(f"⬆️ آپلود به روبیکا...\n📁 {file_path.name}")
-    uploaded = await client.upload(str(file_path), file_name=file_path.name, callback=upload_progress)
+    uploaded = await client.upload(str(file_path), file_name=file_path.name, chunk=int(os.getenv("RUBIKA_UPLOAD_CHUNK", str(8 * 1024 * 1024))), callback=upload_progress)
     file_inline = _make_file_inline(uploaded, file_type)
     
     kwargs = {"object_guid": object_guid, "text": caption, "file_inline": file_inline}
@@ -289,6 +289,8 @@ def run_rubika_bot() -> None:
 
     DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+    from rubika_speedup import apply_speedup
+    apply_speedup()  # ⚡ آپلود موازی + چانک بزرگ‌تر برای روبیکا
     from rubpy import Client
     client = Client(name=RUBIKA_SESSION)
 

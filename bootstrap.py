@@ -56,21 +56,37 @@ async def _ensure_gplaydl() -> None:
 
 
 def _warn_gplaydl_setup() -> None:
+    """
+    اگه gplaydl v2 هنوز auth نشده، به کاربر هشدار می‌ده.
+
+    gplaydl v2 توکن احراز هویت رو در این مسیرها ذخیره می‌کنه (به ازای هر معماری):
+        ~/.config/gplaydl/auth-arm64.json
+        ~/.config/gplaydl/auth-armv7.json
+    (نسخهٔ ۱ از credentials.json و دستور «gplaydl setup» استفاده می‌کرد که منسوخ شده.)
+    """
     from pathlib import Path as P
-    config_candidates = [
+
+    config_dir = P.home() / ".config" / "gplaydl"
+    legacy_candidates = [
         P.home() / ".gplaydl" / "credentials.json",
-        P.home() / ".config" / "gplaydl" / "credentials.json",
+        config_dir / "credentials.json",
     ]
-    if any(p.exists() for p in config_candidates):
+    # v2: هر فایل auth-*.json یعنی احراز هویت انجام شده
+    has_v2_auth = config_dir.is_dir() and any(config_dir.glob("auth-*.json"))
+    has_legacy = any(p.exists() for p in legacy_candidates)
+
+    if has_v2_auth or has_legacy:
         return
 
     print(
         "\n"
         "═══════════════════════════════════════════\n"
-        "⚠️  gplaydl هنوز تنظیم نشده!\n"
+        "⚠️  gplaydl هنوز احراز هویت نشده!\n"
         "یه بار این دستور رو بزن:\n\n"
-        "    gplaydl setup\n\n"
-        "یه اکانت گوگل می‌خواد (برای دانلود از گوگل پلی)\n"
+        "    gplaydl auth\n\n"
+        "این یه توکن ناشناس (anonymous) از dispenser می‌گیره و\n"
+        "نیازی به وارد کردن اکانت گوگل نداره. برای armv7 جداگانه:\n\n"
+        "    gplaydl auth --arch armv7\n"
         "═══════════════════════════════════════════\n"
     )
 

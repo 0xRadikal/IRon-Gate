@@ -76,7 +76,9 @@ except ValueError:
     OWNER_ID = 0
 
 RUBIKA_SESSION = os.getenv("RUBIKA_SESSION", "rubsession").strip()
-PLAY_ARCH = os.getenv("PLAY_ARCH", "arm64").strip()
+PLAY_ARCH = os.getenv("PLAY_ARCH", "universal").strip() or "universal"
+# اندازهٔ چانک آپلود روبیکا (بایت). بزرگ‌تر = رفت‌وبرگشت کمتر = سریع‌تر.
+RUBIKA_UPLOAD_CHUNK = int(os.getenv("RUBIKA_UPLOAD_CHUNK", str(8 * 1024 * 1024)))
 DOWNLOAD_DIR = Path(os.getenv("DOWNLOAD_DIR", "downloads"))
 APKEDITOR_JAR = Path(os.getenv("APKEDITOR_JAR", "tools/APKEditor.jar"))
 BASE_DIR = Path(__file__).resolve().parent
@@ -146,6 +148,8 @@ async def get_rubika_client():
         return None
     if _rubika_client is None:
         try:
+            from rubika_speedup import apply_speedup
+            apply_speedup()  # ⚡ آپلود موازی + چانک بزرگ‌تر برای روبیکا
             from rubpy import Client as RubikaClient
             _rubika_client = RubikaClient(name=str(BASE_DIR / RUBIKA_SESSION))
             await _rubika_client.start()
@@ -378,6 +382,7 @@ async def _upload_to_target(
                     uploaded = await client.upload(
                         str(file_path),
                         file_name=file_name,
+                        chunk=RUBIKA_UPLOAD_CHUNK,
                         callback=progress_cb,
                     )
 

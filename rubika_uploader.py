@@ -7,6 +7,7 @@ rubika_uploader.py — آپلود فایل به روبیکا از هر جای پ
 مستقیم به روبیکا آپلود کنه.
 """
 
+import os
 import time
 from pathlib import Path
 from typing import Callable, Awaitable
@@ -87,6 +88,8 @@ async def upload_to_rubika(
         RubikaUploadError: اگه آپلود ناموفق بود
     """
     try:
+        from rubika_speedup import apply_speedup
+        apply_speedup()  # ⚡ آپلود موازی + چانک بزرگ‌تر
         from rubpy import Client
     except ImportError as e:
         raise RubikaUploadError(f"rubpy نصب نیست: {e}") from e
@@ -140,6 +143,7 @@ async def upload_to_rubika(
             uploaded = await client.upload(
                 str(file_path),
                 file_name=file_name,
+                chunk=int(os.getenv("RUBIKA_UPLOAD_CHUNK", str(8 * 1024 * 1024))),
                 callback=_upload_cb,
             )
 

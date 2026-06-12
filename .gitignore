@@ -1,0 +1,53 @@
+# ─── محیط و رازها ─────────────────────────────
+.env
+.env.*
+!.env.example
+*.env.save
+
+# ─── session روبیکا (حاوی توکن ورود!) ─────────
+*.session
+*.session-journal
+rubsession*
+*.rdb
+
+# ─── دانلودها و فایل‌های موقت ──────────────────
+downloads/
+tmp/
+*.apk
+*.apks
+*.xapk
+*.obb
+
+# ─── ابزارهای خودکار دانلودشده ────────────────
+tools/APKEditor.jar
+tools/*.jar
+
+# ─── محیط مجازی پایتون ────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ─── پایتون ───────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# ─── لاگ‌ها ───────────────────────────────────
+*.log
+logs/
+
+# ─── سیستم‌عامل / ویرایشگر ─────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
